@@ -49,8 +49,6 @@ var clang_options;
 var clang_version;
 
 $(document).ready(function(){
-	load_doc();
-
 	sourceCode = localStorage.getItem('sourceCode');
 	if(!sourceCode) {
 		sourceCode = example;
@@ -65,9 +63,9 @@ $(document).ready(function(){
 	code.setOption('showInvisibles', true);
 	code.setPrintMarginColumn(80);
 	code.$blockScrolling = Infinity;
-	code.getSession().setValue(sourceCode);
 	code.getSession().on('change', save_state);
 
+	load_doc(sourceCode);
 
 	$('#update_button').on('click', function(evt){
 		request_update(clang_options, clang_version);
@@ -79,22 +77,25 @@ $(document).ready(function(){
 		clang_version = undefined;
 		localStorage.removeItem('sourceCode');
 		localStorage.removeItem('options');
-		load_doc();
+		load_doc(example);
 	});
 	$('#load_button').on('change', load_config);
 });
 
-function load_doc() {
-	$.ajax({
-	  url: clang_format_config.url + ':' + clang_format_config.port + '/doc',
-	  type: 'GET',
-	  dataType: 'json',
-	  crossDomain: true,
-	  success: create_inputs,
-	  error: handle_ajax_error
-	});
-  }
-  
+function load_doc(sourceCode) {
+  $.ajax({
+    url: clang_format_config.url + ':' + clang_format_config.port + '/doc',
+    type: 'GET',
+    dataType: 'json',
+    crossDomain: true,
+    success: function(options) {
+      create_inputs(options);
+      request_update(clang_options, clang_version, sourceCode);
+    },
+    error: handle_ajax_error
+  });
+}
+
 function update_code(data){
 	var range = code.selection.getRange();
 	code.getSession().setValue(data);
@@ -102,23 +103,27 @@ function update_code(data){
 }
 
 function save_state() {
-	localStorage.setItem('sourceCode', code.getSession().getValue());
-	localStorage.setItem('options', JSON.stringify({
-	  'version': clang_version,
-	  'options': get_config(clang_options, clang_version)
-	}));
+  if (clang_options && clang_version) {
+    localStorage.setItem('sourceCode', code.getSession().getValue());
+    localStorage.setItem('options', JSON.stringify({
+      'version': clang_version,
+      'options': get_config(clang_options, clang_version)
+    }));
   }
-  
-function request_update(clang_options, version){
+}
+
+function request_update(clang_options, version, source=null){
 	var new_config = get_config(clang_options, version);
 	code.getSession().setTabSize(new_config.TabWidth || 2);
 	code.setPrintMarginColumn(new_config.ColumnLimit || 80);
 	var range = code.selection.getRange();
 
+	source = source || code.getSession().getValue();
+
 	var options = {
 		config: JSON.stringify(new_config),
 		version: version,
-		code: code.getSession().getValue()
+		code: source
 	};
 
 	if(range.start.row != range.end.row && range.start.column != range.end.column)
@@ -192,16 +197,7 @@ function create_inputs(options){
 
 	var container = $('#options');
 	var storedState = JSON.parse(localStorage.getItem('options'));
-	
-	var currentConfig = {};
-	if (storedState && storedState.version == clang_version)
-	{
-		currentConfig = storedState.options;
-	}
-	if (clang_options && clang_version)
-	{
-		$.extend(currentConfig, get_config(clang_options, clang_version));
-	}
+	var origVersion = clang_version
 
 	if(typeof(clang_version) === 'undefined')
 	{
@@ -221,6 +217,16 @@ function create_inputs(options){
 		});
 	}
 
+	var currentConfig = {};
+	if (storedState && storedState.version == clang_version)
+	{
+		currentConfig = storedState.options;
+	}
+	if (clang_options && origVersion)
+	{
+		$.extend(currentConfig, get_config(clang_options, origVersion));
+	}
+
 	container.empty();
 	$.each(options[clang_version], function(key, value){
 		var input = create_input(key, value);
@@ -237,7 +243,6 @@ function create_inputs(options){
 	$('.form-control').on('change', function(evt){
 		request_update(clang_options, clang_version);
 	});
-
 }
 
 function create_input(option_name, option_details){

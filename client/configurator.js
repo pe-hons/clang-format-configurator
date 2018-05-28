@@ -49,14 +49,12 @@ var clang_options;
 var clang_version;
 
 $(document).ready(function(){
-	$.ajax({
-		url: clang_format_config.url + ':' + clang_format_config.port + '/doc',
-		type: 'GET',
-		dataType: 'json',
-		crossDomain: true,
-		success: create_inputs,
-		error: handle_ajax_error
-	});
+	load_doc();
+
+	sourceCode = localStorage.getItem('sourceCode');
+	if(!sourceCode) {
+		sourceCode = example;
+	};
 
 	code = ace.edit('code');
 	code.setTheme('ace/theme/twilight');
@@ -67,7 +65,8 @@ $(document).ready(function(){
 	code.setOption('showInvisibles', true);
 	code.setPrintMarginColumn(80);
 	code.$blockScrolling = Infinity;
-	code.getSession().setValue(example);
+	code.getSession().setValue(sourceCode);
+	code.getSession().on('change', save_state);
 
 
 	$('#update_button').on('click', function(evt){
@@ -76,13 +75,38 @@ $(document).ready(function(){
 	$('#save_button').on('click', function(evt){
 		save_config(clang_options, clang_version);
 	});
+	$('#reset_button').on('click', function(evt){
+		clang_version = undefined;
+		localStorage.removeItem('sourceCode');
+		localStorage.removeItem('options');
+		load_doc();
+	});
 	$('#load_button').on('change', load_config);
 });
+
+function load_doc() {
+  $.ajax({
+    url: clang_format_config.url + ':' + clang_format_config.port + '/doc',
+    type: 'GET',
+    dataType: 'json',
+    crossDomain: true,
+    success: create_inputs,
+    error: handle_ajax_error
+  });
+}
 
 function update_code(data){
 	var range = code.selection.getRange();
 	code.getSession().setValue(data);
 	code.selection.setRange(range);
+}
+
+function save_state() {
+  localStorage.setItem('sourceCode', code.getSession().getValue());
+  localStorage.setItem('options', JSON.stringify({
+    'version': clang_version,
+    'options': get_config(clang_options, clang_version)
+  }));
 }
 
 function request_update(clang_options, version){
@@ -120,7 +144,7 @@ function load_config(evt){
 				data = window.YAML.parse(yml);
 			}
 			catch(err){
-				alert('The file you uploaded does not appear to be a valid YAML file');
+				alert('The file you uploaded does not appear to be a valid YAML file:\n' + err.message);
 			}
 
 			_.each(data, function(value, key){
@@ -165,26 +189,47 @@ function get_config(options, version){
 function create_inputs(options){
 
 	var container = $('#options');
+	var storedState = JSON.parse(localStorage.getItem('options'));
+	
+	var currentConfig = {};
+	if (storedState && storedState.version == clang_version)
+	{
+		currentConfig = storedState.options;
+	}
+	if (clang_options && clang_version)
+	{
+		$.extend(currentConfig, get_config(clang_options, clang_version));
+	}
 
 	if(typeof(clang_version) === 'undefined')
 	{
 		clang_options = options;
-		clang_version = options.versions[0];
+		clang_version = storedState && storedState.version;
+		if(!clang_version || !options.versions.includes(clang_version)) {
+			clang_version = options.versions[0];
+		};
 
-		var version_input = select_input('clang_version', options.versions);
-		$(version_input).appendTo($('#version'));
+		$('#version').html(select_input('clang_version', options.versions));
 
+		$('#clang_version').val(clang_version);
 		$('#clang_version').on('change', function(evt){
 			clang_version = $('#clang_version').val();
-			container.empty();
 			create_inputs(options);
 			request_update(clang_options, clang_version);
 		});
 	}
 
+	container.empty();
 	$.each(options[clang_version], function(key, value){
 		var input = create_input(key, value);
 		$(input).appendTo(container);
+	});
+
+	$.each(currentConfig, function(key, value){
+		var clang_option = clang_options[clang_version][key];
+		if(clang_option){
+			$('#' + key).val(value);
+		}
 	});
 
 	$('.form-control').on('change', function(evt){

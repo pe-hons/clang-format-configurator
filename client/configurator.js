@@ -85,16 +85,16 @@ $(document).ready(function(){
 });
 
 function load_doc() {
-  $.ajax({
-    url: clang_format_config.url + ':' + clang_format_config.port + '/doc',
-    type: 'GET',
-    dataType: 'json',
-    crossDomain: true,
-    success: create_inputs,
-    error: handle_ajax_error
-  });
-}
-
+	$.ajax({
+	  url: clang_format_config.url + ':' + clang_format_config.port + '/doc',
+	  type: 'GET',
+	  dataType: 'json',
+	  crossDomain: true,
+	  success: create_inputs,
+	  error: handle_ajax_error
+	});
+  }
+  
 function update_code(data){
 	var range = code.selection.getRange();
 	code.getSession().setValue(data);
@@ -102,13 +102,13 @@ function update_code(data){
 }
 
 function save_state() {
-  localStorage.setItem('sourceCode', code.getSession().getValue());
-  localStorage.setItem('options', JSON.stringify({
-    'version': clang_version,
-    'options': get_config(clang_options, clang_version)
-  }));
-}
-
+	localStorage.setItem('sourceCode', code.getSession().getValue());
+	localStorage.setItem('options', JSON.stringify({
+	  'version': clang_version,
+	  'options': get_config(clang_options, clang_version)
+	}));
+  }
+  
 function request_update(clang_options, version){
 	var new_config = get_config(clang_options, version);
 	code.getSession().setTabSize(new_config.TabWidth || 2);
@@ -124,6 +124,7 @@ function request_update(clang_options, version){
 	if(range.start.row != range.end.row && range.start.column != range.end.column)
 		options.range = range.start.row + ':' + range.end.row;
 
+	$('#code').css('background-color', 'rgba(0,0,0,0.5) !important');
 	$.ajax({
 		url: clang_format_config.url + ':' + clang_format_config.port + '/format',
 		type: 'POST',
@@ -131,6 +132,7 @@ function request_update(clang_options, version){
 		crossDomain: true,
 		success: update_code,
 		error: handle_ajax_error,
+		complete: function() {$('#code').css('background-color', '');},
 		data: options
 	});
 }

@@ -156,7 +156,10 @@ function load_config(evt){
 
 			_.each(data, function(value, key){
 				var clang_option = clang_options[clang_version][key];
-				if(clang_option){
+				if(clang_option) {
+					if(typeof(value) === "boolean") {
+						value = value.toString();
+					}
 					$('#' + key).val(value);
 				}
 				else
